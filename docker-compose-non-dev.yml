@@ -1,0 +1,113 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements. See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with the
+# License. You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+version: "3.7"
+
+services:
+  redis:
+    image: redis:7
+    container_name: superset_cache
+    restart: unless-stopped
+    volumes:
+      - redis:/data
+
+  db:
+    env_file: docker/.env-non-dev
+    image: postgres:15
+    container_name: superset_db
+    restart: unless-stopped
+    volumes:
+      - db_home:/var/lib/postgresql/data
+      - ./docker/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
+
+  superset:
+    env_file: docker/.env-non-dev
+    image: apachesuperset.docker.scarf.sh/apache/superset:latest-dev
+    container_name: superset_app
+    command: 
+      - /bin/sh
+      - -c
+      - |
+        pip install psycopg2-binary
+        /usr/bin/run-server.sh
+    user: "root"
+    restart: unless-stopped
+    ports:
+      - 8088:8088
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ./docker:/app/docker
+      - superset_home:/app/superset_home
+
+  superset-init:
+    image: apache/superset:latest-dev
+    container_name: superset_init
+    command: ["/app/docker/docker-init.sh"]
+    env_file: docker/.env-non-dev
+    depends_on:
+      - db
+      - redis
+    user: "root"
+    volumes:
+      - ./docker:/app/docker
+      - superset_home:/app/superset_home
+    healthcheck:
+      disable: true
+
+  superset-worker:
+    image: apache/superset:latest-dev
+    container_name: superset_worker
+    command: ["/app/docker/docker-bootstrap.sh", "worker"]
+    env_file: docker/.env-non-dev
+    restart: unless-stopped
+    depends_on:
+      - db
+      - redis
+    user: "root"
+    volumes:
+      - ./docker:/app/docker
+      - superset_home:/app/superset_home
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "celery -A superset.tasks.celery_app:app inspect ping -d celery@$$HOSTNAME",
+        ]
+
+  superset-worker-beat:
+    image: apache/superset:latest-dev
+    container_name: superset_worker_beat
+    command: ["/app/docker/docker-bootstrap.sh", "beat"]
+    env_file: docker/.env-non-dev
+    restart: unless-stopped
+    depends_on:
+      - db
+      - redis
+    user: "root"
+    volumes:
+      - ./docker:/app/docker
+      - superset_home:/app/superset_home
+    healthcheck:
+      disable: true
+
+volumes:
+  superset_home:
+    external: false
+  db_home:
+    external: false
+  redis:
+    external: false
