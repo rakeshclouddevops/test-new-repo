@@ -199,7 +199,7 @@
     "redux-thunk": "^2.1.0",
     "redux-undo": "^1.0.0-beta9-9-7",
     "regenerator-runtime": "^0.13.5",
-    "rimraf": "^3.0.2",
+    "rimraf": "^6.0.1",
     "rison": "^0.1.1",
     "rsuite": "^5.74.2",
     "scroll-into-view-if-needed": "^2.2.28",
